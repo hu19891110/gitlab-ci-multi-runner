@@ -162,28 +162,35 @@ func (b *Build) executeUploadArtifacts(state error, executor Executor, abort cha
 	return
 }
 
-func (b *Build) executeScript(executor Executor, abort chan interface{}) error {
-	// Execute pre script (git clone, cache restore, artifacts download)
-	err := b.executeShellScript(ShellPrepareScript, executor, abort)
+func (b *Build) retryExecuteScript(executor Executor, abort chan interface{}) (err error) {
+	for tries := 0; tries < PreBuildRetries; tries++ {
+		// Execute pre script (git clone, cache restore, artifacts download)
+		err := b.executeShellScript(ShellPrepareScript, executor, abort)
 
-	if err == nil {
-		// Execute user build script (before_script + script)
-		err = b.executeShellScript(ShellBuildScript, executor, abort)
+		if err == nil {
+			// Execute user build script (before_script + script)
+			err = b.executeShellScript(ShellBuildScript, executor, abort)
 
-		// Execute after script (after_script)
-		timeoutCh := make(chan interface{}, 1)
-		timeout := time.AfterFunc(time.Minute*5, func() {
-			close(timeoutCh)
-		})
-		b.executeShellScript(ShellAfterScript, executor, timeoutCh)
-		timeout.Stop()
+			// Execute after script (after_script)
+			timeoutCh := make(chan interface{}, 1)
+			timeout := time.AfterFunc(time.Minute * 5, func() {
+				close(timeoutCh)
+			})
+			b.executeShellScript(ShellAfterScript, executor, timeoutCh)
+			timeout.Stop()
+		}
+
+		// Execute post script (cache store, artifacts upload)
+		if err == nil {
+			err = b.executeShellScript(ShellArchiveCache, executor, abort)
+		}
+
+		err = b.executeUploadArtifacts(err, executor, abort)
+
+		if err != nil {
+			return err
+		}
 	}
-
-	// Execute post script (cache store, artifacts upload)
-	if err == nil {
-		err = b.executeShellScript(ShellArchiveCache, executor, abort)
-	}
-	err = b.executeUploadArtifacts(err, executor, abort)
 	return err
 }
 
@@ -198,7 +205,7 @@ func (b *Build) run(executor Executor) (err error) {
 
 	// Run build script
 	go func() {
-		buildFinish <- b.executeScript(executor, buildAbort)
+		buildFinish <- b.retryExecuteScript(executor, buildAbort)
 	}()
 
 	// Wait for signals: cancel, timeout, abort or finish
