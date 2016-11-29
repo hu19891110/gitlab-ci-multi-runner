@@ -165,7 +165,7 @@ func (b *Build) executeUploadArtifacts(state error, executor Executor, abort cha
 func (b *Build) retryExecuteScript(executor Executor, abort chan interface{}) (err error) {
 	for tries := 0; tries < PreBuildRetries; tries++ {
 		// Execute pre script (git clone, cache restore, artifacts download)
-		err := b.executeShellScript(ShellPrepareScript, executor, abort)
+		err = b.executeShellScript(ShellPrepareScript, executor, abort)
 
 		if err == nil {
 			// Execute user build script (before_script + script)
@@ -187,11 +187,12 @@ func (b *Build) retryExecuteScript(executor Executor, abort chan interface{}) (e
 
 		err = b.executeUploadArtifacts(err, executor, abort)
 
-		if err != nil {
-			return err
+		if err == nil {
+			return
 		}
 	}
-	return err
+
+	return
 }
 
 func (b *Build) run(executor Executor) (err error) {
