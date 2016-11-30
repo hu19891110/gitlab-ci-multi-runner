@@ -109,8 +109,8 @@ func (b *Build) StartBuild(rootDir, cacheDir string, sharedDir bool) {
 	b.CacheDir = path.Join(cacheDir, b.ProjectUniqueDir(false))
 }
 
-func (b *Build) retryExecuteShellScript(scriptType ShellScriptType, executor Executor, abort chan interface{}) (err error) {
-	for tries := 0; tries < PreBuildRetries; tries++ {
+func (b *Build) retryExecuteShellScript(scriptType ShellScriptType, executor Executor, abort chan interface{}, retries int8) (err error) {
+	for tries := int8(0); tries < retries; tries++ {
 		err = b.executeShellScript(scriptType, executor, abort)
 
 		if err == nil {
@@ -176,7 +176,7 @@ func (b *Build) executeUploadArtifacts(state error, executor Executor, abort cha
 
 func (b *Build) executeScript(executor Executor, abort chan interface{}) error {
 	// Execute pre script (git clone, cache restore, artifacts download)
-	err := b.retryExecuteShellScript(ShellPrepareScript, executor, abort)
+	err := b.retryExecuteShellScript(ShellPrepareScript, executor, abort, b.GetPreBuildRetries())
 
 	if err == nil {
 		// Execute user build script (before_script + script)
@@ -375,4 +375,14 @@ func (b *Build) IsDebugTraceEnabled() bool {
 
 func (b *Build) GetDockerAuthConfig() string {
 	return b.GetAllVariables().Get("DOCKER_AUTH_CONFIG")
+}
+
+func (b *Build) GetPreBuildRetries() int8 {
+	retries, err := strconv.ParseInt(b.GetAllVariables().Get("PRE_BUILD_RETRIES"), 0, 8)
+
+	if err == nil {
+		return int8(retries)
+	}
+
+	return PreBuildRetries
 }
