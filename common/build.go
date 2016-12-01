@@ -109,11 +109,13 @@ func (b *Build) StartBuild(rootDir, cacheDir string, sharedDir bool) {
 	b.CacheDir = path.Join(cacheDir, b.ProjectUniqueDir(false))
 }
 
-func (b *Build) retryExecuteShellScript(scriptType ShellScriptType, executor Executor, abort chan interface{}, retries int8) (err error) {
-	for tries := int8(0); tries < retries; tries++ {
-		err = b.executeShellScript(scriptType, executor, abort)
+func (b *Build) retryExecuteShellScript(scriptType ShellScriptType, executor Executor, abort chan interface{}, attempts int) (err error) {
+	if attempts < 1 || attempts > 10 {
+		return errors.New("Number of attempts out of the range [1, 10]")
+	}
 
-		if err == nil {
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err = b.executeShellScript(scriptType, executor, abort); err == nil {
 			return
 		}
 	}
@@ -377,12 +379,12 @@ func (b *Build) GetDockerAuthConfig() string {
 	return b.GetAllVariables().Get("DOCKER_AUTH_CONFIG")
 }
 
-func (b *Build) GetPreBuildRetries() int8 {
-	retries, err := strconv.ParseInt(b.GetAllVariables().Get("PRE_BUILD_RETRIES"), 0, 8)
+func (b *Build) GetPreBuildRetries() int {
+	retries, err := strconv.Atoi(b.GetAllVariables().Get("PRE_BUILD_ATTEMPTS"))
 
-	if err == nil {
-		return int8(retries)
+	if err != nil {
+		return DefaultPreBuildAttempts
 	}
 
-	return PreBuildRetries
+	return retries
 }
