@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof" // PPROF package adds everyting itself inside its init() function
 	"os"
 	"os/signal"
 	"runtime"
